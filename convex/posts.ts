@@ -72,6 +72,7 @@ export const list = query({
           comments: commentsWithUsers,
           likes: post.likes ?? [],
           tags: post.tags ?? [],
+          userId: post.userId, // Explicitly include userId
         };
       })
     );
@@ -124,5 +125,42 @@ export const addComment = mutation({
       userId,
       text: args.text,
     });
+  },
+});
+
+export const deletePost = mutation({
+  args: {
+    postId: v.id("posts"),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    // Get the post
+    const post = await ctx.db.get(args.postId);
+    if (!post) throw new Error("Post not found");
+
+    // Check if the user is the owner of the post
+    if (post.userId.toString() !== userId.toString()) {
+      throw new Error("You don't have permission to delete this post");
+    }
+
+    // Delete all comments associated with this post
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_post", (q) => q.eq("postId", args.postId))
+      .collect();
+
+    for (const comment of comments) {
+      await ctx.db.delete(comment._id);
+    }
+
+    // Delete the image from storage
+    await ctx.storage.delete(post.imageId);
+
+    // Delete the post
+    await ctx.db.delete(args.postId);
+
+    return { success: true };
   },
 });

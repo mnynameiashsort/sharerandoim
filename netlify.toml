@@ -1,0 +1,6 @@
+[build]
+  publish = "dist"
+  command = "npx vite build"
+
+[context.production.environment]
+  VITE_CONVEX_URL = "https://wonderful-cheetah-242.convex.cloud"

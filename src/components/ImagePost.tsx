@@ -20,16 +20,24 @@ interface Post extends Omit<Doc<"posts">, 'likes'> {
   likes: Id<"users">[];
   tags: string[];
   caption: string;
+  userId: Id<"users">;
 }
 
 export function ImagePost({ post }: { post: Post }) {
   const toggleLike = useMutation(api.posts.toggleLike);
   const addComment = useMutation(api.posts.addComment);
+  const deletePost = useMutation(api.posts.deletePost);
   const [newComment, setNewComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLikeAnimating, setIsLikeAnimating] = useState(false);
   const [showAllComments, setShowAllComments] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const commentsRef = useRef<HTMLDivElement>(null);
+  
+  // Get current user to check if they're the post owner
+  const currentUser = useQuery(api.auth.loggedInUser);
+  const isOwner = currentUser && post.userId && currentUser._id && post.userId.toString() === currentUser._id.toString();
   
   // Format the post creation time
   const formattedTime = formatDistanceToNow(new Date(post._creationTime), { addSuffix: true });
@@ -39,6 +47,22 @@ export function ImagePost({ post }: { post: Post }) {
     setIsLikeAnimating(true);
     await toggleLike({ postId: post._id });
     setTimeout(() => setIsLikeAnimating(false), 1000);
+  };
+  
+  // Handle post deletion
+  const handleDeletePost = async () => {
+    if (isDeleting) return;
+    
+    try {
+      setIsDeleting(true);
+      await deletePost({ postId: post._id });
+      // The post will be removed from the UI automatically when the query refreshes
+    } catch (error) {
+      console.error("Error deleting post:", error);
+      setShowDeleteConfirm(false);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -84,11 +108,51 @@ export function ImagePost({ post }: { post: Post }) {
             <div className="text-xs text-gray-500">{formattedTime}</div>
           </div>
         </div>
-        <button className="text-gray-400 hover:text-gray-600">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
-          </svg>
-        </button>
+        <div className="relative">
+          {isOwner ? (
+            <>
+              <button 
+                onClick={() => setShowDeleteConfirm(!showDeleteConfirm)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Post options"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
+                </svg>
+              </button>
+              
+              {/* Delete confirmation dropdown */}
+              {showDeleteConfirm && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-200">
+                  <div className="px-4 py-2 text-sm text-gray-700 border-b border-gray-100">
+                    Delete this post?
+                  </div>
+                  <div className="flex justify-between px-4 py-2">
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="text-sm text-gray-600 hover:text-gray-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeletePost}
+                      className="text-sm text-red-600 hover:text-red-800 font-medium"
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <button className="text-gray-400 hover:text-gray-600">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
       
       {/* Image container with overlay for double-click like */}
