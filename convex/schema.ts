@@ -49,7 +49,57 @@ const applicationTables = {
   })
 };
 
+// Gamification and social features tables
+const gamificationTables = {
+  userProfiles: defineTable({
+    userId: v.id("users"),
+    points: v.number(),
+    badges: v.array(v.string()),
+    lastCheckIn: v.optional(v.number()),
+    consecutiveCheckIns: v.number(),
+  }).index("by_user", ["userId"]),
+  
+  challenges: defineTable({
+    title: v.string(),
+    description: v.string(),
+    pointsReward: v.number(),
+    badgeReward: v.optional(v.string()),
+    requirements: v.object({
+      type: v.string(), // e.g., "posts", "comments", "likes"
+      count: v.number(),
+    }),
+    startDate: v.number(),
+    endDate: v.optional(v.number()),
+    isActive: v.boolean(),
+  }),
+  
+  userChallenges: defineTable({
+    userId: v.id("users"),
+    challengeId: v.id("challenges"),
+    progress: v.number(),
+    completed: v.boolean(),
+    completedDate: v.optional(v.number()),
+    rewardClaimed: v.boolean(),
+  }).index("by_user", ["userId"]),
+  
+  notifications: defineTable({
+    userId: v.id("users"),
+    type: v.string(), // e.g., "like", "comment", "challenge"
+    message: v.string(),
+    relatedId: v.optional(v.id("posts")), // Optional reference to related content
+    read: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
+  
+  reactions: defineTable({
+    postId: v.id("posts"),
+    userId: v.id("users"),
+    type: v.string(), // e.g., "like", "love", "laugh", "wow", "sad", "angry"
+  }).index("by_post", ["postId"]),
+};
+
 export default defineSchema({
   ...authTables,
   ...applicationTables,
+  ...gamificationTables,
 });

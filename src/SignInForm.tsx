@@ -1,37 +1,87 @@
 "use client";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { useMutation, useConvexAuth } from "convex/react";
+import { api } from "../convex/_generated/api";
 
 export function SignInForm() {
   const { signIn } = useAuthActions();
+  const { isAuthenticated } = useConvexAuth();
+  const createUser = useMutation(api.auth.createUser);
   const [flow, setFlow] = useState<"signIn" | "signUp">("signIn");
   const [submitting, setSubmitting] = useState(false);
+  const [justAuthenticated, setJustAuthenticated] = useState(false);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  
+  // When the user becomes authenticated, create their user profile
+  useEffect(() => {
+    if (isAuthenticated && justAuthenticated) {
+      // Create the user in our database
+      createUser()
+        .then(() => {
+          console.log("User profile created successfully");
+          setJustAuthenticated(false);
+        })
+        .catch((err) => {
+          console.error("Error creating user profile:", err);
+        });
+    }
+  }, [isAuthenticated, justAuthenticated, createUser]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError("");
+    
+    try {
+      // Create a FormData object with the correct fields
+      const formData = new FormData();
+      formData.append("email", email);
+      formData.append("password", password);
+      formData.append("flow", flow); // This is important - tells Convex whether to sign in or sign up
+      
+      // Call the password provider with the form data
+      await signIn("password", formData);
+      
+      // Mark that we just authenticated to trigger user creation
+      setJustAuthenticated(true);
+      
+      // Clear the form
+      if (flow === "signUp") {
+        setEmail("");
+        setPassword("");
+        toast.success("Account created successfully!");
+      }
+    } catch (error) {
+      console.error("Authentication error:", error);
+      const toastTitle =
+        flow === "signIn"
+          ? "Could not sign in, did you mean to sign up?"
+          : "Could not sign up, did you mean to sign in?";
+      toast.error(toastTitle);
+      setError(toastTitle);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="w-full">
       <form
         className="flex flex-col gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setSubmitting(true);
-          const formData = new FormData(e.target as HTMLFormElement);
-          formData.set("flow", flow);
-          void signIn("password", formData).catch((_error) => {
-            const toastTitle =
-              flow === "signIn"
-                ? "Could not sign in, did you mean to sign up?"
-                : "Could not sign up, did you mean to sign in?";
-            toast.error(toastTitle);
-            setSubmitting(false);
-          });
-        }}
+        onSubmit={handleSubmit}
       >
         <input
           className="input-field"
           type="email"
           name="email"
           placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           required
         />
         <input
@@ -39,8 +89,13 @@ export function SignInForm() {
           type="password"
           name="password"
           placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
           required
         />
+        {error && (
+          <div className="text-red-500 text-sm">{error}</div>
+        )}
         <button className="auth-button" type="submit" disabled={submitting}>
           {flow === "signIn" ? "Sign in" : "Sign up"}
         </button>
